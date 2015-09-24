@@ -21,18 +21,10 @@ using namespace std;
 //hide the local functions in an anon namespace
 namespace {
     void help(char** av) {
-        cout << "The program captures frames from a video file, image sequence (01.jpg, 02.jpg ... 10.jpg) or camera connected to your computer." << endl
-        << "Usage:\n" << av[0] << " <video file, image sequence or device number>" << endl
-        << "q,Q,esc -- quit" << endl
-        << "space   -- save frame" << endl << endl
-        << "\tTo capture from a camera pass the device number. To find the device number, try ls /dev/video*" << endl
-        << "\texample: " << av[0] << " 0" << endl
-        << "\tYou may also pass a video file instead of a device number" << endl
-        << "\texample: " << av[0] << " video.avi" << endl
-        << "\tYou can also pass the path to an image sequence and OpenCV will treat the sequence just like a video." << endl
-        << "\texample: " << av[0] << " right%%02d.jpg" << endl;
+        cout << "Add Man-page reference here.";
     }
     
+    //VideoCapture function. Not currently used, but implemented for later real-time Optical Flow detection.
     int process(VideoCapture& capture) {
         int n = 0;
         char filename[200];
@@ -66,15 +58,16 @@ namespace {
         return 0;
     }
     
-    void findCorners(Mat img, int xarea, int yarea) {
+    Mat findCorners(Mat img, int xarea, int yarea, int thres) {
         //We're using Morevac Corner Detection here as it is easier to implement.
         //TODO: Consider using Harris Corners
         ofstream log; //This will be used for dumping raw data for corner analysis
         log.open("log.csv");
-        
         log << "x,y,score1,score2\n";
         
-        printf("This is still under construction.");
+        Mat outimg = img.clone(); //This will be used to provide a visual indication of the corners present
+        
+        printf("This is still under construction. - areas - (%d,%d), thres - %d",xarea,yarea,thres);
         
         int dimx = img.cols, dimy = img.rows;
         
@@ -127,9 +120,16 @@ namespace {
                 results[1]/=2;
                 printf("Scores obtained: %f, %f\n", results[0],results[1]);
                 
+                //thresholding
+                if(results[0]>=thres && results[1]>=thres)
+                {
+                    rectangle(outimg, Point(startx,starty), Point(startx+xarea,starty+yarea), Scalar(0));
+                }
+                
                 log << startx << "," << starty << "," << results[0] << "," << results[1] << "\n";
             }
         log.close();
+        return outimg;
     }
 //end of namespace
 }
@@ -151,16 +151,12 @@ int main(int ac, char** av) {
 //    }
 //    return process(capture);
     
-    //New Code being written
+    //Step 1 - Implementing Corner Detection
     //Read the file
     Mat src = imread(av[1]);
     Mat src_color; //To store the file after conversion
     cvtColor(src, src_color, CV_BGR2GRAY);
     
-//    string windowname = "Main Window";
-//    namedWindow(windowname, WINDOW_AUTOSIZE);
-//    imshow(windowname, src_color);
-//    waitKey(0);
     printf("Dimensions of the Image: %d, %d", src_color.cols, src_color.rows);
     
     for(;;)
@@ -172,6 +168,11 @@ int main(int ac, char** av) {
         int i = src_color.at<uchar>(y,x);
         printf("\n\nYou entered x - %d and y - %d.\nIntensity(%d,%d) = %d:", x,y,x,y,i);
     }
-    findCorners(src_color, 20,20);
+    int xarea=20,yarea=20,thres=10;
+    Mat corners = findCorners(src_color, xarea,yarea,thres);
     
+    string winCorImg = "Corners found";
+    namedWindow(winCorImg, WINDOW_AUTOSIZE);
+    imshow(winCorImg, corners);
+    waitKey(0);
 }
