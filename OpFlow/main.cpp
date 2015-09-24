@@ -14,6 +14,7 @@
 #include <math.h>
 #include <iostream>
 #include <stdio.h>
+#include <deque>
 
 using namespace cv;
 using namespace std;
@@ -47,7 +48,15 @@ namespace {
                 case 27: //escape key
                     return 0;
                 case ' ': //Save an image
-                    sprintf(filename,"filename%.3d.jpg",n++);
+                    for(int i=0;i<30;i++)
+                    {
+                        capture >> frame;
+                        sprintf(filename,"filename%.3d.jpg",i);
+                        imwrite(filename,frame);
+                        cout << "Saved " << filename << endl;
+                        
+                    }
+                    sprintf(filename,"sfilename%.3d.jpg",n++);
                     imwrite(filename,frame);
                     cout << "Saved " << filename << endl;
                     break;
@@ -58,7 +67,9 @@ namespace {
         return 0;
     }
     
-    Mat findCorners(Mat img, int xarea, int yarea, int thres) {
+    deque<Point> findCorners(Mat img, int xarea, int yarea, int thres, bool verbose=true) {
+        deque<Point> corners;
+        
         //We're using Morevac Corner Detection here as it is easier to implement.
         //TODO: Consider using Harris Corners
         ofstream log; //This will be used for dumping raw data for corner analysis
@@ -67,7 +78,8 @@ namespace {
         
         Mat outimg = img.clone(); //This will be used to provide a visual indication of the corners present
         
-        printf("This is still under construction. - areas - (%d,%d), thres - %d",xarea,yarea,thres);
+        if(verbose)
+            printf("This is still under construction. - areas - (%d,%d), thres - %d",xarea,yarea,thres);
         
         int dimx = img.cols, dimy = img.rows;
         
@@ -76,7 +88,8 @@ namespace {
             for(int starty=0;(starty+yarea)<dimy;starty+=yarea)
             {
                 count++;
-                printf("\n Area %d - Currenty looking at area (%d-%d,%d-%d)\n",count,startx,startx+xarea,starty,starty+yarea);
+                if(verbose)
+                    printf("\n Area %d - Currenty looking at area (%d-%d,%d-%d)\n",count,startx,startx+xarea,starty,starty+yarea);
                 Mat curarea = img(Range(starty,min(starty+yarea,dimy)),Range(startx,min(dimx,startx+xarea)));
                 double results[2] = {0,0};
                 for(int dir = 0;dir<4;dir++)
@@ -110,7 +123,8 @@ namespace {
 
                     if(newarea.cols!=curarea.cols || newarea.rows!=curarea.rows)
                     {
-                        printf("Skipping due to dimensional or similarity issues");
+                        if(verbose)
+                            printf("Skipping due to dimensional or similarity issues");
                         continue;
                     }
                     Mat diff = abs(curarea-newarea);
@@ -118,17 +132,104 @@ namespace {
                 }
                 results[0]/=2;
                 results[1]/=2;
-                printf("Scores obtained: %f, %f\n", results[0],results[1]);
+                if(verbose)
+                    printf("Scores obtained: %f, %f\n", results[0],results[1]);
                 
                 //thresholding
                 if(results[0]>=thres && results[1]>=thres)
                 {
+                    corners.push_back(Point(startx,starty));
                     rectangle(outimg, Point(startx,starty), Point(startx+xarea,starty+yarea), Scalar(0),2);
                 }
                 
                 log << startx << "," << starty << "," << results[0] << "," << results[1] << "\n";
             }
         log.close();
+        
+        if(verbose)
+        {
+            string winCorImg = "Corners found";
+            namedWindow(winCorImg, WINDOW_AUTOSIZE);
+            imshow(winCorImg, outimg);
+            waitKey(0);
+        }
+        
+        return corners;
+    }
+    
+    Mat lucasKanade(Mat imgA, Mat imgB, int xsarea, int ysarea, int xarea, int yarea, deque<Point> corners, bool verbose=true)
+    {
+        Mat outimg = imgB.clone();
+        
+        int dimx = imgA.cols, dimy = imgA.rows;
+        
+        //iterate through each corner to find flow vectors
+        for(int i=0;i<corners.size();i++)
+        {
+            Point cur_corner = corners[i];
+            Point corner_mid = Point(corners[i].x+(int)(xarea/2),cur_corner.y+(int)(yarea/2));
+            
+            //Draw the corner in the out-image
+            rectangle(outimg, cur_corner, cur_corner+Point(xarea,yarea), Scalar(0), 2);
+            
+            //Set range parameters
+            Range sry = Range(max(0,corner_mid.y-(int)(ysarea/2)), min(dimy,corner_mid.y+(int)(ysarea/2)));
+            Range srx = Range(max(0,corner_mid.x-(int)(xsarea/2)), min(dimx,corner_mid.x+(int)(xsarea/2)));
+            
+            //Now that we've found search windows, we can proceed to calculate Ix and Iy for each pixel in the search window
+            //Ix
+            Mat Ix = imgA.clone(), Iy=imgA.clone();
+            
+            int range=1;
+            double G[2][2] = {0,0,0,0};
+            double b[2] = {0,0};
+            
+            for(int x=srx.start; x<=srx.end; x++)
+                for(int y=sry.start;y<=sry.end;y++)
+                {
+                    int px=x-range, nx=x+range;
+                    int py=y-range, ny=y+range;
+                    if(x==0) px=x;
+                    if(x>=(dimx-1)) nx=x;
+                    if(y==0) py=0;
+                    if(y>=(dimy-1)) ny=y;
+  
+                    double curIx = ((int)imgA.at<uchar>(y,px)-(int)imgA.at<uchar>(y,nx))/2;
+                    double curIy = ((int)imgA.at<uchar>(py,x)-(int)imgA.at<uchar>(ny,x))/2;
+                    Ix.at<uchar>(y,x) = curIx;
+                    Iy.at<uchar>(y,x) = curIy;
+                    
+                    //calculate G and b
+                    G[0][0] += curIx*curIx;
+                    G[0][1] += curIx*curIy;
+                    G[1][0] += curIx*curIy;
+                    G[1][1] += curIy*curIy;
+                    
+                    double curdI = ((int)imgA.at<uchar>(y,x)-(int)imgB.at<uchar>(y,x));
+                    
+                    b[0] += curdI*curIx;
+                    b[1] += curdI*curIy;
+                }
+            
+            //Since it's a royal pain-in-the-ass to download and link matrix libraries to my XCode
+            //for just a single operation, we're just gonna do it by hand
+            double detG = (G[0][0]*G[1][1])-(G[0][1]*G[1][0]);
+            double Ginv[2][2] = {0,0,0,0};
+            Ginv[0][0] = G[1][1]/detG;
+            Ginv[0][1] = -G[0][1]/detG;
+            Ginv[1][0] = -G[1][0]/detG;
+            Ginv[1][1] = G[0][0]/detG;
+            
+            double V[2] = {Ginv[0][0]*b[0]+Ginv[0][1]*b[1],Ginv[1][0]*b[0]+Ginv[1][1]*b[1]};
+            if(verbose)
+                printf("\nFor the corner (%d,%d) - v = (%f,%f)",cur_corner.x,cur_corner.y,V[0],V[1]);
+            
+            line(outimg, corner_mid, corner_mid+Point(V[0]*10,V[1]*10), Scalar(1), 1);
+        }
+        string winCorImg = "Corners found";
+        namedWindow(winCorImg, WINDOW_AUTOSIZE);
+        imshow(winCorImg, outimg);
+        waitKey(0);
         return outimg;
     }
 //end of namespace
@@ -136,10 +237,10 @@ namespace {
 
 int main(int ac, char** av) {
     
-    if (ac != 2) {
-        help(av);
-        return 1;
-    }
+//    if (ac != 2) {
+//        help(av);
+//        return 1;
+//    }
 //    std::string arg = av[1];
 //    VideoCapture capture(arg); //try to open string, this will attempt to open it as a video file or image sequence
 //    if (!capture.isOpened()) //if this fails, try to open as a video camera, through the use of an integer param
@@ -151,11 +252,15 @@ int main(int ac, char** av) {
 //    }
 //    return process(capture);
     
-    //Step 1 - Implementing Corner Detection
-    //Read the file
+//    Step 1 - Implementing Corner Detection
+//    Read the file
     Mat src = imread(av[1]);
-    Mat src_color; //To store the file after conversion
+    Mat src_color, img1, img2; //To store the file after conversion
     cvtColor(src, src_color, CV_BGR2GRAY);
+    src = imread("filename000.jpg");
+    cvtColor(src, img1, CV_BGR2GRAY);
+    src = imread("filename001.jpg");
+    cvtColor(src, img2, CV_BGR2GRAY);
     
     printf("Dimensions of the Image: %d, %d", src_color.cols, src_color.rows);
     
@@ -168,11 +273,33 @@ int main(int ac, char** av) {
         int i = src_color.at<uchar>(y,x);
         printf("\n\nYou entered x - %d and y - %d.\nIntensity(%d,%d) = %d:", x,y,x,y,i);
     }
-    int xarea=5,yarea=5,thres=8;
-    Mat corners = findCorners(src_color, xarea,yarea,thres);
+    int xarea=10,yarea=10,thres=8;
+    deque<Point> corners = findCorners(src_color, xarea,yarea,thres);
     
-    string winCorImg = "Corners found";
-    namedWindow(winCorImg, WINDOW_AUTOSIZE);
-    imshow(winCorImg, corners);
-    waitKey(0);
+    for(int i =0; i< corners.size();i++)
+        printf("\nCorner %d: %d,%d",i,corners[i].x,corners[i].y);
+    
+//    Step 2 - Implementing Lucas-Kanade Tracker
+    Mat previmg = img1, curimg;
+    for(int i=1; i < 30;i++)
+    {
+        char buffer[17];
+        
+        sprintf(buffer, "filename%.3d.jpg", i-1);
+        printf("\nLoaded %s for prev",buffer);
+        src = imread(buffer);
+        cvtColor(src, previmg, CV_BGR2GRAY);
+        
+        sprintf(buffer, "filename%.3d.jpg", i);
+        printf("\nLoaded %s",buffer);
+        src = imread(buffer);
+        cvtColor(src, curimg, CV_BGR2GRAY);
+        
+        deque<Point> corn = findCorners(previmg, xarea, yarea, thres, false);
+        
+        lucasKanade(previmg, curimg, 3, 3, xarea, yarea, corn);
+        
+    }
+    
+    //Mat lucaskan = lucasKanade(img1, img2, 3, 3, xarea, yarea, corners);
 }
