@@ -123,7 +123,7 @@ namespace {
                 //thresholding
                 if(results[0]>=thres && results[1]>=thres)
                 {
-                    rectangle(outimg, Point(startx,starty), Point(startx+xarea,starty+yarea), Scalar(0));
+                    rectangle(outimg, Point(startx,starty), Point(startx+xarea,starty+yarea), Scalar(0),2);
                 }
                 
                 log << startx << "," << starty << "," << results[0] << "," << results[1] << "\n";
@@ -161,14 +161,14 @@ int main(int ac, char** av) {
     
     for(;;)
     {
-        cout << "\nPlease enter x,y parameters to read intensity:";
+        cout << "\nPlease enter x,y parameters to read intensity (-1to begin corner detection):";
         int x,y;
         scanf("%d,%d",&x,&y);
         if (x<0 || y<0) break;
         int i = src_color.at<uchar>(y,x);
         printf("\n\nYou entered x - %d and y - %d.\nIntensity(%d,%d) = %d:", x,y,x,y,i);
     }
-    int xarea=20,yarea=20,thres=10;
+    int xarea=5,yarea=5,thres=8;
     Mat corners = findCorners(src_color, xarea,yarea,thres);
     
     string winCorImg = "Corners found";
