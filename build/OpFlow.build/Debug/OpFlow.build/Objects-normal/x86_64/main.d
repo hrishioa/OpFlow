@@ -31,4 +31,6 @@ dependencies: \
   /usr/local/include/opencv2/imgproc/imgproc_c.h \
   /usr/local/include/opencv2/imgproc/types_c.h \
   /usr/local/include/opencv2/imgcodecs/imgcodecs_c.h \
-  /usr/local/include/opencv2/videoio/videoio_c.h
+  /usr/local/include/opencv2/videoio/videoio_c.h \
+  /usr/local/include/opencv2/imgproc/imgproc.hpp \
+  /usr/local/include/opencv2/imgproc.hpp
