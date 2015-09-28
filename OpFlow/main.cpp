@@ -157,7 +157,7 @@ namespace {
         return corners;
     }
     
-    Mat lucasKanade(Mat imgA, Mat imgB, int xsarea, int ysarea, int xarea, int yarea, deque<Point> corners, bool verbose=true)
+    Mat lucasKanade(Mat imgA, Mat imgB, int xsarea, int ysarea, int xarea, int yarea, deque<Point> corners, bool verbose=true, char filename[] = NULL)
     {
         Mat outimg = imgB.clone();
         
@@ -230,6 +230,24 @@ namespace {
         namedWindow(winCorImg, WINDOW_AUTOSIZE);
         imshow(winCorImg, outimg);
         waitKey(0);
+        if(filename!=NULL)
+        {
+            cout << string("\nWriting lkoutput to o") << string(filename);
+            imwrite(string("o")+string(filename), outimg);
+        }
+        return outimg;
+    }
+    
+    Mat hornShunck(Mat imgA, Mat imgB, int scalefactor, int xysize, double smoothnessAssumption)
+    {
+        Mat outimg;
+        
+        //To improve performance and smoothness, we need to resize the image
+        resize(imgA, imgA, Size(0,0), (double)scalefactor, (double)scalefactor);
+        resize(imgB, imgB, Size(0,0), (double)scalefactor, (double)scalefactor);
+        
+        //Once again, we need to calculate the following variables - Ix, Iy and It
+        
         return outimg;
     }
 //end of namespace
@@ -273,33 +291,37 @@ int main(int ac, char** av) {
         int i = src_color.at<uchar>(y,x);
         printf("\n\nYou entered x - %d and y - %d.\nIntensity(%d,%d) = %d:", x,y,x,y,i);
     }
+    
     int xarea=10,yarea=10,thres=8;
-    deque<Point> corners = findCorners(src_color, xarea,yarea,thres);
     
-    for(int i =0; i< corners.size();i++)
-        printf("\nCorner %d: %d,%d",i,corners[i].x,corners[i].y);
+    cout << "\n Enter 1 to start Lucas-Kanade, 0 to skip: ";
     
-//    Step 2 - Implementing Lucas-Kanade Tracker
-    Mat previmg = img1, curimg;
-    for(int i=1; i < 30;i++)
+    int inp=0;
+    scanf("%d",&inp);
+    if(inp==1)
     {
-        char buffer[17];
+        //    Step 2 - Implementing Lucas-Kanade Tracker
+        Mat previmg = img1, curimg;
+        for(int i=1; i < 30;i++)
+        {
+            char buffer[17];
         
-        sprintf(buffer, "filename%.3d.jpg", i-1);
-        printf("\nLoaded %s for prev",buffer);
-        src = imread(buffer);
-        cvtColor(src, previmg, CV_BGR2GRAY);
+            sprintf(buffer, "filename%.3d.jpg", i-1);
+            printf("\nLoaded %s for prev",buffer);
+            src = imread(buffer);
+            cvtColor(src, previmg, CV_BGR2GRAY);
         
-        sprintf(buffer, "filename%.3d.jpg", i);
-        printf("\nLoaded %s",buffer);
-        src = imread(buffer);
-        cvtColor(src, curimg, CV_BGR2GRAY);
+            sprintf(buffer, "filename%.3d.jpg", i);
+            printf("\nLoaded %s",buffer);
+            src = imread(buffer);
+            cvtColor(src, curimg, CV_BGR2GRAY);
         
-        deque<Point> corn = findCorners(previmg, xarea, yarea, thres, false);
+            deque<Point> corn = findCorners(previmg, xarea, yarea, thres, false);
         
-        lucasKanade(previmg, curimg, 3, 3, xarea, yarea, corn);
-        
+            lucasKanade(previmg, curimg, 3, 3, xarea, yarea, corn, true, buffer);
+        }
     }
+
     
-    //Mat lucaskan = lucasKanade(img1, img2, 3, 3, xarea, yarea, corners);
+    //Next we try to implement Horn-Shunck
 }
